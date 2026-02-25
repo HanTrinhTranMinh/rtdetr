@@ -105,8 +105,7 @@ def train_one_epoch(model, criterion, loader, optimizer, device: str, epoch: int
     pbar = tqdm(loader, desc=f"Epoch {epoch}/{epochs}")
 
     for imgs, targets in pbar:
-        imgs = imgs.to(device, non_blocking=True)
-
+        imgs = torch.stack(imgs).to(device, non_blocking=True) #
         outputs = model(imgs)
         losses = criterion(outputs, targets)
         loss = losses["loss_total"]
