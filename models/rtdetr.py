@@ -2,7 +2,7 @@
 # models/rtdetr.py
 # models/rtdetr.py
 import torch.nn as nn
-from .backbone import ConvNeXtBackbone  # Sửa lại đúng tên class
+from .backbone import ConvNeXtTiny  # Sửa lại đúng tên class
 from .neck import HybridEncoder
 from .head import RTDETRDecoderHead
 
