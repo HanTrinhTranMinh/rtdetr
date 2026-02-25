@@ -1,57 +1,55 @@
 # Xử lý COCO data
 # src/dataset.py
-# dataset.py
-
 import os
-from roboflow import Roboflow
+import torch
+from torch.utils.data import Dataset
+from pycocotools.coco import COCO
+from PIL import Image
+import torchvision.transforms as T
 
+class COCODetection(Dataset):
+    def __init__(self, img_folder, ann_file, img_size=640, training=True):
+        self.coco = COCO(ann_file) #
+        self.ids = list(sorted(self.coco.imgs.keys()))
+        self.img_folder = img_folder
+        self.img_size = img_size
+        self.cat_ids_sorted = sorted(self.coco.getCatIds()) #
+        
+        self.transform = T.Compose([
+            T.Resize((img_size, img_size)),
+            T.ToTensor(),
+            T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
 
-def download_dataset(
-    api_key: str,
-    workspace: str,
-    project_name: str,
-    version_number: int,
-    format_type: str = "coco"
-):
-    """
-    Download dataset from Roboflow.
+    def __getitem__(self, index):
+        img_id = self.ids[index]
+        ann_ids = self.coco.getAnnIds(imgIds=img_id)
+        target = self.coco.loadAnns(ann_ids)
+        
+        img_info = self.coco.loadImgs(img_id)[0]
+        path = img_info['file_name']
+        img = Image.open(os.path.join(self.img_folder, path)).convert('RGB')
+        
+        boxes = []
+        labels = []
+        for obj in target:
+            x, y, w, h = obj['bbox']
+            # Chuyển sang cxcywh normalized cho SetCriterion
+            cx = (x + w/2) / img_info['width']
+            cy = (y + h/2) / img_info['height']
+            nw = w / img_info['width']
+            nh = h / img_info['height']
+            boxes.append([cx, cy, nw, nh])
+            labels.append(self.cat_ids_sorted.index(obj['category_id']))
 
-    Args:
-        api_key (str): Roboflow API key
-        workspace (str): Workspace name
-        project_name (str): Project name
-        version_number (int): Version number
-        format_type (str): Dataset format (e.g., 'coco', 'yolov5', 'yolov8')
+        return self.transform(img), {
+            "boxes": torch.as_tensor(boxes, dtype=torch.float32),
+            "labels": torch.as_tensor(labels, dtype=torch.long),
+            "image_id": torch.tensor([img_id])
+        }
 
-    Returns:
-        dataset_path (str): Local path to downloaded dataset
-    """
+    def __len__(self):
+        return len(self.ids)
 
-    print("Connecting to Roboflow...")
-    rf = Roboflow(api_key=api_key)
-
-    print(f"Accessing workspace: {workspace}")
-    project = rf.workspace(workspace).project(project_name)
-
-    print(f"Downloading version {version_number} in format: {format_type}")
-    version = project.version(version_number)
-    dataset = version.download(format_type)
-
-    print("Download complete!")
-    print(f"Dataset saved at: {dataset.location}")
-
-    return dataset.location
-
-
-if __name__ == "__main__":
-    API_KEY = "YOUR_API_KEY_HERE"
-
-    dataset_path = download_dataset(
-        api_key=API_KEY,
-        workspace="gn-nhn-yc6af",
-        project_name="printed-circuit-board-olvhh",
-        version_number=1,
-        format_type="coco"  # đổi sang yolov8 nếu cần
-    )
-
-    print("Dataset path:", dataset_path)
+def collate_fn(batch):
+    return tuple(zip(*batch)) #

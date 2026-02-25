@@ -1,14 +1,15 @@
 # Class tổng hợp mô hình
 # models/rtdetr.py
+# models/rtdetr.py
 import torch.nn as nn
-from .backbone import ConvNeXtTiny
+from .backbone import ConvNeXtBackbone  # Sửa lại đúng tên class
 from .neck import HybridEncoder
 from .head import RTDETRDecoderHead
 
 class RTDETR(nn.Module):
     def __init__(self, num_classes=80, hidden_dim=256, num_queries=300):
         super().__init__()
-        self.backbone = ConvNeXtTiny()
+        self.backbone = ConvNeXtBackbone() # Sửa ở đây
         self.neck = HybridEncoder(self.backbone.out_channels, hidden_dim=hidden_dim)
         self.head = RTDETRDecoderHead(hidden_dim=hidden_dim, num_classes=num_classes, num_queries=num_queries)
 
