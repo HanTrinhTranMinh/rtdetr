@@ -11,23 +11,33 @@ class PositionalEncoding2D(nn.Module):
         self.temperature = temperature
 
     def forward(self, x):
-        # x: (N,C,H,W)
         n, c, h, w = x.shape
         device = x.device
-        y_embed = torch.linspace(0, 1, h, device=device).unsqueeze(1).repeat(1, w)
-        x_embed = torch.linspace(0, 1, w, device=device).unsqueeze(0).repeat(h, 1)
+        
+        # Tạo lưới tọa độ
+        y_embed = torch.arange(1, h + 1, device=device, dtype=torch.float32)
+        x_embed = torch.arange(1, w + 1, device=device, dtype=torch.float32)
+        
+        # Tính toán thang đo cho tần số
+        dim_t = torch.arange(self.dim // 4, device=device, dtype=torch.float32)
+        dim_t = self.temperature ** (4 * dim_t / self.dim)
 
-        dim_t = torch.arange(self.dim // 2, device=device, dtype=torch.float32)
-        dim_t = self.temperature ** (2 * (dim_t // 2) / (self.dim // 2))
+        # Tạo positional encoding cho x và y
+        pos_x = x_embed[:, None] / dim_t
+        pos_y = y_embed[:, None] / dim_t
 
-        pos_x = x_embed[..., None] / dim_t
-        pos_y = y_embed[..., None] / dim_t
+        # Áp dụng sin và cos
+        pos_x = torch.stack((pos_x.sin(), pos_x.cos()), dim=-1).flatten(1) # (W, dim//2)
+        pos_y = torch.stack((pos_y.sin(), pos_y.cos()), dim=-1).flatten(1) # (H, dim//2)
 
-        pos_x = torch.stack((pos_x.sin(), pos_x.cos()), dim=-1).flatten(-2)
-        pos_y = torch.stack((pos_y.sin(), pos_y.cos()), dim=-1).flatten(-2)
-
-        pos = torch.cat((pos_y, pos_x), dim=-1)  # (H,W,dim)
-        pos = pos.permute(2, 0, 1).unsqueeze(0).repeat(n, 1, 1, 1)  # (N,dim,H,W)
+        # Kết hợp lại thành (H, W, dim)
+        pos = torch.cat((
+            pos_y.unsqueeze(1).repeat(1, w, 1),
+            pos_x.unsqueeze(0).repeat(h, 1, 1)
+        ), dim=-1)
+        
+        # Chuyển về định dạng (N, dim, H, W)
+        pos = pos.permute(2, 0, 1).unsqueeze(0).repeat(n, 1, 1, 1)
         return pos
 
 class HybridEncoder(nn.Module):
@@ -38,6 +48,7 @@ class HybridEncoder(nn.Module):
         super().__init__()
         self.hidden_dim = hidden_dim
 
+        # Đảm bảo in_channels nhận từ backbone đúng (c3, c4, c5)
         self.proj3 = nn.Conv2d(in_channels["c3"], hidden_dim, 1)
         self.proj4 = nn.Conv2d(in_channels["c4"], hidden_dim, 1)
         self.proj5 = nn.Conv2d(in_channels["c5"], hidden_dim, 1)
